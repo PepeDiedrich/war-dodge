@@ -1,9 +1,9 @@
 TERMUX_PKG_HOMEPAGE=https://github.com/PepeDiedrich/war-dodge
 TERMUX_PKG_DESCRIPTION="Location-aware monitor for U.S. State Department travel advisory changes"
-TERMUX_PKG_VERSION=0.1.1
+TERMUX_PKG_VERSION=0.1.2
 TERMUX_PKG_REVISION=1
 TERMUX_PKG_SRCURL=https://github.com/PepeDiedrich/war-dodge/archive/refs/tags/v${TERMUX_PKG_VERSION}.tar.gz
-TERMUX_PKG_SHA256=TO_BE_FILLED_AFTER_V0_1_1_RELEASE
+TERMUX_PKG_SHA256=TO_BE_FILLED_AFTER_V0_1_2_RELEASE
 TERMUX_PKG_LICENSE="MIT"
 TERMUX_PKG_MAINTAINER="@PepeDiedrich"
 TERMUX_PKG_DEPENDS="termux-api"
