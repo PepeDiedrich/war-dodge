@@ -1,10 +1,15 @@
 [package]
-name = "termux-poller"
+name = "war-dodger"
 version = "0.1.0"
 edition = "2024"
 rust-version = "1.85"
-description = "A low-resource periodic command runner for Termux"
+description = "A four-phase, notification-ready Termux monitor"
 license = "MIT OR Apache-2.0"
+
+[dependencies]
+reqwest = { version = "0.12", default-features = false, features = ["blocking", "json", "rustls-tls"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
 
 [profile.release]
 opt-level = "z"

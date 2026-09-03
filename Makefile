@@ -1,4 +1,4 @@
-APP := termux-poller
+APP := war-dodger
 
 .PHONY: check test bench release install clean
 check:

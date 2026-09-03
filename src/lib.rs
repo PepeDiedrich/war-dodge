@@ -7,26 +7,90 @@ use std::time::Duration;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Config {
-    pub command: String,
+    pub location_provider: String,
     pub interval: Duration,
     pub retry_min: Duration,
     pub retry_max: Duration,
     pub health_host: SocketAddr,
     pub connect_timeout: Duration,
+    pub notify_command: String,
+    pub notify_on_initial: bool,
 }
 
 impl Default for Config {
     fn default() -> Self {
         Self {
-            command: "echo 'set command in config.conf'".into(),
+            location_provider: "termux".into(),
             interval: Duration::from_secs(30 * 60),
             retry_min: Duration::from_secs(30),
             retry_max: Duration::from_secs(15 * 60),
             // TCP is cheaper than an HTTP request and needs no TLS dependency.
             health_host: "1.1.1.1:53".parse().expect("static socket address"),
             connect_timeout: Duration::from_secs(8),
+            notify_command: "termux-notification --title \"$WAR_DODGER_TITLE\" --content \"$WAR_DODGER_MESSAGE\"".into(),
+            notify_on_initial: false,
         }
     }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(u8)]
+pub enum Phase {
+    One = 1,
+    Two = 2,
+    Three = 3,
+    Four = 4,
+}
+
+impl Phase {
+    pub fn number(self) -> u8 {
+        self as u8
+    }
+    pub fn parse(input: &str) -> Result<Self, ConfigError> {
+        match input.trim() {
+            "1" => Ok(Self::One),
+            "2" => Ok(Self::Two),
+            "3" => Ok(Self::Three),
+            "4" => Ok(Self::Four),
+            value => Err(ConfigError(format!(
+                "phase must be 1, 2, 3, or 4, got {value:?}"
+            ))),
+        }
+    }
+    pub fn title(self) -> String {
+        format!("War Dodger: Stufe {}", self.number())
+    }
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::One => "normale Vorsicht",
+            Self::Two => "erhöhte Vorsicht",
+            Self::Three => "Reise überdenken",
+            Self::Four => "nicht reisen",
+        }
+    }
+}
+
+impl fmt::Display for Phase {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.number())
+    }
+}
+pub fn parse_phase_output(output: &str) -> Result<Phase, ConfigError> {
+    Phase::parse(output)
+}
+
+pub fn load_phase(path: &Path) -> io::Result<Option<Phase>> {
+    match fs::read_to_string(path) {
+        Ok(value) => Phase::parse(&value)
+            .map(Some)
+            .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error)),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(None),
+        Err(error) => Err(error),
+    }
+}
+pub fn save_phase(path: &Path, phase: Phase) -> io::Result<()> {
+    fs::create_dir_all(path.parent().unwrap_or_else(|| Path::new(".")))?;
+    fs::write(path, format!("{phase}\n"))
 }
 
 #[derive(Debug)]
@@ -78,7 +142,7 @@ pub fn load_config(path: &Path) -> Result<Config, Box<dyn std::error::Error>> {
             ConfigError(format!("line {}: expected key = value", line_number + 1))
         })?;
         match key.trim() {
-            "command" => config.command = value.trim().to_owned(),
+            "location_provider" => config.location_provider = value.trim().to_owned(),
             "interval" => config.interval = parse_duration(value)?,
             "retry_min" => config.retry_min = parse_duration(value)?,
             "retry_max" => config.retry_max = parse_duration(value)?,
@@ -88,6 +152,19 @@ pub fn load_config(path: &Path) -> Result<Config, Box<dyn std::error::Error>> {
                 })?
             }
             "connect_timeout" => config.connect_timeout = parse_duration(value)?,
+            "notify_command" => config.notify_command = value.trim().to_owned(),
+            "notify_on_initial" => {
+                config.notify_on_initial = match value.trim() {
+                    "true" => true,
+                    "false" => false,
+                    value => {
+                        return Err(Box::new(ConfigError(format!(
+                            "line {}: expected true or false, got {value:?}",
+                            line_number + 1
+                        ))));
+                    }
+                }
+            }
             key => {
                 return Err(Box::new(ConfigError(format!(
                     "line {}: unknown setting {key:?}",
@@ -96,8 +173,10 @@ pub fn load_config(path: &Path) -> Result<Config, Box<dyn std::error::Error>> {
             }
         }
     }
-    if config.command.is_empty() {
-        return Err(Box::new(ConfigError("command must not be empty".into())));
+    if !matches!(config.location_provider.as_str(), "termux" | "ip") {
+        return Err(Box::new(ConfigError(
+            "location_provider must be termux or ip".into(),
+        )));
     }
     if config.retry_max < config.retry_min {
         return Err(Box::new(ConfigError(
@@ -139,5 +218,11 @@ mod tests {
         assert_eq!(next_backoff(None, min, max), min);
         assert_eq!(next_backoff(Some(min), min, max), Duration::from_secs(4));
         assert_eq!(next_backoff(Some(Duration::from_secs(4)), min, max), max);
+    }
+    #[test]
+    fn phase_output_is_restricted_to_four_phases() {
+        assert_eq!(parse_phase_output(" 3\n").unwrap(), Phase::Three);
+        assert!(parse_phase_output("0").is_err());
+        assert!(parse_phase_output("critical").is_err());
     }
 }

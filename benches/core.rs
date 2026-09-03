@@ -1,6 +1,6 @@
 use std::hint::black_box;
 use std::time::Instant;
-use termux_poller::{next_backoff, parse_duration};
+use war_dodger::{next_backoff, parse_duration};
 
 fn bench(name: &str, iterations: u64, mut operation: impl FnMut()) {
     for _ in 0..10_000 {

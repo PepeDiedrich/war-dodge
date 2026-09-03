@@ -1,52 +1,66 @@
-# termux-poller
+# War Dodger
 
-Ein sehr schlanker periodischer Rust-Runner für Termux. Er schläft zwischen Ausführungen vollständig, prüft vor der Aufgabe mit einem einzelnen TCP-Handshake die Erreichbarkeit und wiederholt Netz- und Befehlsfehler mit begrenztem exponentiellem Backoff. Die Release-Binary hat keine Runtime-Abhängigkeiten.
+Ein schlanker, lokaler Termux-Dienst für einen später zu definierenden
+vierstufigen War-Dodger. Das Projekt enthält bewusst noch keine Bewertung
+geopolitischer Daten und keine Regeln für Eskalationsstufen. Es stellt die
+Ausführung, Speicherung und Erinnerung bei einem Phasenübergang bereit.
 
-## Auf dem Handy installieren
+## Ablauf
 
-~~~sh
-pkg install rust make git
-git clone <DEIN-REPOSITORY-URL> termux-poller
-cd termux-poller
+Der Standort wird stündlich ermittelt. `scope_command` liefert das aktuelle
+Land plus direkte Landnachbarn als ISO-Codes. Rust lädt den offiziellen
+Travel-State-RSS-Feed und bestimmt für jedes dieser Länder dessen
+Reisehinweisstufe `1` bis `4`.
+
+Die Stufen aller beobachteten Länder werden lokal gespeichert. Jede Änderung
+im Aufenthaltsland löst eine Benachrichtigung aus. Bei direkten Nachbarländern
+werden nur die Eskalationen `2 → 3` und `3 → 4` gemeldet. Solange im
+Aufenthaltsland Stufe 3 aktiv ist, folgt nach jeder erfolgreichen
+Stundenprüfung zusätzlich eine Erinnerung. Der erste Lauf speichert nur den
+Startwert.
+
+`phase_command` ist austauschbar, falls später eine zusätzliche Datenquelle
+oder eine andere Bewertungsregel ergänzt werden soll.
+
+## Termux installieren
+
+```sh
+pkg install rust make git termux-api
+git clone <DEIN-REPOSITORY-URL> war-dodger
+cd war-dodger
 make install PREFIX="$PREFIX"
-termux-poller init
-nano ~/.config/termux-poller/config.conf
-termux-poller run
-~~~
+war-dodger init
+nano ~/.config/war-dodger/config.conf
+war-dodger once
+```
 
-Die Zeile command ist die eigentliche Aufgabe, beispielsweise:
+Zusätzlich muss die Android-App **Termux:API** installiert sein; erteile ihr
+die Standortberechtigung und deaktiviere keine Benachrichtigungen. Rust nutzt
+die Standortkoordinaten nur, um Aufenthaltsland und Landnachbarn zu bestimmen.
+Falls Termux:API nicht verfügbar ist, wird nur das Land über die öffentliche
+IP ermittelt; das kann bei VPN oder Mobilfunk-Routing ungenau sein.
+`termux-notification` erhält Titel und Text über `WAR_DODGER_TITLE` bzw.
+`WAR_DODGER_MESSAGE`, sodass später auch eine andere Push-Lösung verwendbar ist.
 
-~~~ini
-command = curl -fsS https://example.org/worker
-interval = 30m
-retry_min = 30s
-retry_max = 15m
-~~~
+## Paketvorbereitung
 
-once führt genau einen Versuch aus. retry bleibt bis zu einem erfolgreichen Durchlauf aktiv und passt damit zu einem externen Scheduler. run ist der sparsame Dauermodus: Nach Erfolg schläft der Prozess bis zum nächsten Intervall; nach Ausfall schläft er mit 30 s, 60 s, 120 s … bis maximal 15 min.
+Ein Termux-Paketrezept liegt unter `packaging/termux/war-dodger/`. Nach einem
+versionierten GitHub-Release muss dessen SHA-256 im Rezept eingetragen werden,
+bevor es als Pull Request an `termux-packages` eingereicht werden kann.
 
-Für den automatischen Start nach Neustarts eignet sich Termux:Boot. Lege danach eine ausführbare Datei ~/.termux/boot/start-poller an:
+```sh
+war-dodger once     # eine Prüfung
+war-dodger status   # zuletzt gespeicherte Stufe
+war-dodger run      # Dauerbetrieb; schläft zwischen Prüfungen
+```
 
-~~~sh
+Für den Autostart nach Neustarts eignet sich Termux:Boot:
+
+```sh
 #!/data/data/com.termux/files/usr/bin/sh
 termux-wake-lock
-exec termux-poller run >> "$HOME/.local/state/termux-poller.log" 2>&1
-~~~
+exec war-dodger run >> "$HOME/.local/state/war-dodger.log" 2>&1
+```
 
-Deaktiviere zusätzlich die Akku-Optimierung für Termux in Android, damit Android den wartenden Prozess nicht beendet.
-
-## Entwicklungs- und Optimierungszyklus
-
-~~~sh
-make check       # Format und lints; Warnungen sind Fehler
-make test        # Logiktests
-make bench       # reproduzierbare Microbenchmarks im Release-Profil
-make release     # optimierte Binary
-./scripts/profile-termux.sh  # auf dem Handy: Zeit + maximaler RSS
-~~~
-
-Das Release-Profil nutzt Größenoptimierung, fat LTO, eine Codegen-Unit, entfernte Symbole und panic abort. Vor jeder Optimierung speichern wir Benchmark und Geräteprofil, ändern gezielt eine Sache und messen danach mit demselben Ablauf erneut.
-
-## Später per pkg install
-
-pkg kann nur Pakete aus aktivierten Termux-Repositories installieren. Der erste praktische Vertriebsweg ist ein Git-Release mit vorgebautem aarch64-linux-android-Binary. Für echtes pkg install termux-poller braucht es anschließend ein Paket-Recipe und ein veröffentlichtes eigenes oder offizielles Termux-Repository.
+Deaktiviere für Termux die Akku-Optimierung, damit Android den wartenden Prozess
+nicht beendet.
