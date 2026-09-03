@@ -244,7 +244,7 @@ fn save_levels(path: &Path, levels: &BTreeMap<String, Phase>) -> Result<(), Stri
 fn notify(config: &Config, country: &str, from: Option<Phase>, to: Phase) -> Result<(), String> {
     let message = match from {
         Some(p) if p == to => format!(
-            "{country}: Level {} ({}) remains active. Hourly reminder.",
+            "{country}: Level {} ({}) remains active. Review the full advisory and your departure readiness plan.",
             to.number(),
             to.label()
         ),
@@ -260,6 +260,11 @@ fn notify(config: &Config, country: &str, from: Option<Phase>, to: Phase) -> Res
             to.number(),
             to.label()
         ),
+    };
+    let message = if to == Phase::Three && from != Some(Phase::Three) {
+        format!("{message} Read the full advisory and prepare safe departure options.")
+    } else {
+        message
     };
     let status = Command::new("sh")
         .arg("-c")
