@@ -2,7 +2,9 @@ use std::fmt;
 use std::fs;
 use std::io;
 use std::net::{SocketAddr, TcpStream};
+use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
+use std::path::PathBuf;
 use std::time::Duration;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -25,7 +27,7 @@ impl Default for Config {
             retry_min: Duration::from_secs(30),
             retry_max: Duration::from_secs(15 * 60),
             // TCP is cheaper than an HTTP request and needs no TLS dependency.
-            health_host: "1.1.1.1:53".parse().expect("static socket address"),
+            health_host: "1.1.1.1:443".parse().expect("static socket address"),
             connect_timeout: Duration::from_secs(8),
             notify_command: "termux-notification --title \"$WAR_DODGER_TITLE\" --content \"$WAR_DODGER_MESSAGE\"".into(),
             notify_on_initial: false,
@@ -201,6 +203,28 @@ pub fn next_backoff(previous: Option<Duration>, min: Duration, max: Duration) ->
         .unwrap_or(min)
 }
 
+fn shell_quote(value: &str) -> String {
+    format!("'{}'", value.replace('\'', "'\"'\"'"))
+}
+
+/// Writes the executable Termux:Boot entry atomically and marks it executable.
+pub fn write_boot_script(boot_dir: &Path, executable: &Path) -> io::Result<PathBuf> {
+    fs::create_dir_all(boot_dir)?;
+    let destination = boot_dir.join("start-war-dodger");
+    let temporary = boot_dir.join(format!(".start-war-dodger.{}.tmp", std::process::id()));
+    let executable = shell_quote(&executable.to_string_lossy());
+    let script = format!(
+        "#!/data/data/com.termux/files/usr/bin/sh\n\
+         mkdir -p \"$HOME/.local/state/war-dodger\"\n\
+         termux-wake-lock\n\
+         exec {executable} run >> \"$HOME/.local/state/war-dodger/run.log\" 2>&1\n"
+    );
+    fs::write(&temporary, script)?;
+    fs::set_permissions(&temporary, fs::Permissions::from_mode(0o700))?;
+    fs::rename(&temporary, &destination)?;
+    Ok(destination)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -224,5 +248,20 @@ mod tests {
         assert_eq!(parse_phase_output(" 3\n").unwrap(), Phase::Three);
         assert!(parse_phase_output("0").is_err());
         assert!(parse_phase_output("critical").is_err());
+    }
+
+    #[test]
+    fn boot_script_is_executable_and_shell_quotes_the_binary() {
+        let directory =
+            std::env::temp_dir().join(format!("war-dodger-boot-test-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&directory);
+        let path = write_boot_script(&directory, Path::new("/tmp/war dodger's/bin")).unwrap();
+        let script = fs::read_to_string(&path).unwrap();
+        assert!(script.contains("exec '/tmp/war dodger'\"'\"'s/bin' run"));
+        assert_eq!(
+            fs::metadata(&path).unwrap().permissions().mode() & 0o777,
+            0o700
+        );
+        fs::remove_dir_all(directory).unwrap();
     }
 }

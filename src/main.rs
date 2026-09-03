@@ -7,7 +7,9 @@ use std::thread;
 use std::time::{Duration, SystemTime};
 
 use serde::Deserialize;
-use war_dodger::{Config, Phase, load_config, next_backoff, write_example};
+use war_dodger::{
+    Config, Phase, load_config, network_available, next_backoff, write_boot_script, write_example,
+};
 
 const APP: &str = "war-dodger";
 const ADVISORIES_URL: &str = "https://travel.state.gov/_res/rss/TAsTWs.xml";
@@ -83,7 +85,22 @@ fn cache_path() -> PathBuf {
     .join("countries.json")
 }
 fn usage() {
-    eprintln!("Usage: {APP} [--config PATH] <init|once|retry|run|status>");
+    eprintln!("Usage: {APP} [--config PATH] <init|notify-test|once|retry|run|status>");
+}
+
+fn install_boot_start() -> Result<PathBuf, String> {
+    let boot_dir = env::var_os("WAR_DODGER_BOOT_DIR")
+        .map(PathBuf::from)
+        .or_else(|| {
+            env::var_os("HOME")
+                .map(PathBuf::from)
+                .map(|home| home.join(".termux").join("boot"))
+        })
+        .ok_or("HOME is not set")?;
+    let executable =
+        env::current_exe().map_err(|e| format!("cannot locate current executable: {e}"))?;
+    write_boot_script(&boot_dir, &executable)
+        .map_err(|e| format!("cannot write Termux:Boot script: {e}"))
 }
 
 fn client() -> Result<reqwest::blocking::Client, String> {
@@ -280,6 +297,7 @@ fn notify(config: &Config, country: &str, from: Option<Phase>, to: Phase) -> Res
         .ok_or_else(|| format!("notification command exited with {status}"))
 }
 fn check_once(config: &Config, state: &Path) -> Result<(), String> {
+    network_available(config).map_err(|e| format!("network unavailable: {e}"))?;
     let snapshot = read_snapshot(config)?;
     let previous = load_levels(state)?;
     let level = snapshot.levels[&snapshot.current];
@@ -354,6 +372,18 @@ fn main() -> ExitCode {
     };
     let state = state_path();
     match action.to_string_lossy().as_ref() {
+        "notify-test" => notify(&config, "TEST", None, Phase::One)
+            .map(|_| {
+                println!("{APP}: test notification sent");
+                ExitCode::SUCCESS
+            })
+            .unwrap_or_else(|e| {
+                eprintln!("{APP}: notification test failed: {e}");
+                eprintln!(
+                    "{APP}: install the Termux:API app and run pkg install termux-api, then allow notifications"
+                );
+                ExitCode::FAILURE
+            }),
         "once" => check_once(&config, &state)
             .map(|_| ExitCode::SUCCESS)
             .unwrap_or_else(|e| {
@@ -364,10 +394,24 @@ fn main() -> ExitCode {
             retry_until_success(&config, &state);
             ExitCode::SUCCESS
         }
-        "run" => loop {
-            retry_until_success(&config, &state);
-            thread::sleep(config.interval);
-        },
+        "run" => {
+            match install_boot_start() {
+                Ok(path) => {
+                    eprintln!("{APP}: automatic reboot start configured: {}", path.display())
+                }
+                Err(e) => {
+                    eprintln!("{APP}: {e}");
+                    return ExitCode::FAILURE;
+                }
+            }
+            eprintln!(
+                "{APP}: install and open Termux:Boot once; disable Android battery optimization for reliable background operation"
+            );
+            loop {
+                retry_until_success(&config, &state);
+                thread::sleep(config.interval);
+            }
+        }
         "status" => match load_levels(&state) {
             Ok(levels) => {
                 for (c, p) in levels {
