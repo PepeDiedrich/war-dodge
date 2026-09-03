@@ -5,7 +5,7 @@ repository: copy `war-dodger/` to `packages/war-dodger/`.
 
 Before submitting a pull request:
 
-1. Create and push the signed release tag matching `TERMUX_PKG_VERSION`.
+1. Create and push a release tag matching `TERMUX_PKG_VERSION`.
 2. Download its source archive and replace the placeholder checksum in
    `build.sh` with its SHA-256 value. Termux review requires a real checksum.
 3. Build it from a checkout of `termux-packages` with
