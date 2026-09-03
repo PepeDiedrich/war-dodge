@@ -5,9 +5,9 @@ repository: copy `war-dodger/` to `packages/war-dodger/`.
 
 Before submitting a pull request:
 
-1. Create and push the signed `v0.1.0` release tag.
-2. Download its source archive and replace `SKIP_CHECKSUM` in `build.sh` with
-   its SHA-256 value. Termux review requires a real checksum.
+1. Create and push the signed release tag matching `TERMUX_PKG_VERSION`.
+2. Download its source archive and replace the placeholder checksum in
+   `build.sh` with its SHA-256 value. Termux review requires a real checksum.
 3. Build it from a checkout of `termux-packages` with
    `./build-package.sh packages/war-dodger` and test the generated `.deb` on a
    physical Android device with Termux:API installed.
