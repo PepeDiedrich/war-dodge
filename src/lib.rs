@@ -58,14 +58,14 @@ impl Phase {
         }
     }
     pub fn title(self) -> String {
-        format!("War Dodger: Stufe {}", self.number())
+        format!("War Dodger: Level {}", self.number())
     }
     pub fn label(self) -> &'static str {
         match self {
-            Self::One => "normale Vorsicht",
-            Self::Two => "erhöhte Vorsicht",
-            Self::Three => "Reise überdenken",
-            Self::Four => "nicht reisen",
+            Self::One => "Exercise normal precautions",
+            Self::Two => "Exercise increased caution",
+            Self::Three => "Reconsider travel",
+            Self::Four => "Do not travel",
         }
     }
 }

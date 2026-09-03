@@ -1,60 +1,63 @@
 # War Dodger
 
-Ein schlanker, lokaler Termux-Dienst für einen später zu definierenden
-vierstufigen War-Dodger. Das Projekt enthält bewusst noch keine Bewertung
-geopolitischer Daten und keine Regeln für Eskalationsstufen. Es stellt die
-Ausführung, Speicherung und Erinnerung bei einem Phasenübergang bereit.
+War Dodger is a lightweight Termux monitor for U.S. Department of State Travel
+Advisory levels. It checks the official RSS feed every hour for the country
+where the device is located and every directly bordering country.
 
-## Ablauf
+It is a personal alerting tool, not an emergency service. Always read the full
+country-specific advisory and follow local authorities.
 
-Der Standort wird stündlich ermittelt. `scope_command` liefert das aktuelle
-Land plus direkte Landnachbarn als ISO-Codes. Rust lädt den offiziellen
-Travel-State-RSS-Feed und bestimmt für jedes dieser Länder dessen
-Reisehinweisstufe `1` bis `4`.
+## Alert rules
 
-Die Stufen aller beobachteten Länder werden lokal gespeichert. Jede Änderung
-im Aufenthaltsland löst eine Benachrichtigung aus. Bei direkten Nachbarländern
-werden nur die Eskalationen `2 → 3` und `3 → 4` gemeldet. Solange im
-Aufenthaltsland Stufe 3 aktiv ist, folgt nach jeder erfolgreichen
-Stundenprüfung zusätzlich eine Erinnerung. Der erste Lauf speichert nur den
-Startwert.
+- **Current country:** notify for every level change.
+- **Current country at Level 3:** send an additional reminder after each
+  successful hourly check until the level changes.
+- **Directly bordering countries:** notify only for escalations from Level 2 to
+  3 or Level 3 to 4.
 
-`phase_command` ist austauschbar, falls später eine zusätzliche Datenquelle
-oder eine andere Bewertungsregel ergänzt werden soll.
+The official levels are: 1 — Exercise normal precautions; 2 — Exercise
+increased caution; 3 — Reconsider travel; 4 — Do not travel.
 
-## Termux installieren
+See [Level 3 action guide](LEVEL3_ACTION_GUIDE.md) for a practical preparation
+checklist.
+
+## Data and privacy
+
+Travel Advisory levels are read only from the official State Department RSS
+feed. Country names and land borders are geographic metadata, cached locally
+for 30 days; they do not contain security ratings.
+
+By default, the app asks Termux:API for the Android network location, then
+turns the coordinates into a country. If that is unavailable, it falls back to
+an IP-based country lookup. IP location can be wrong when using a VPN, a mobile
+carrier gateway, or a corporate network.
+
+## Install on Termux
+
+Install the **Termux:API** Android app from the same source as Termux, grant it
+location permission, then run:
 
 ```sh
 pkg install rust make git termux-api
-git clone <DEIN-REPOSITORY-URL> war-dodger
-cd war-dodger
+git clone https://github.com/PepeDiedrich/war-dodge.git
+cd war-dodge
 make install PREFIX="$PREFIX"
 war-dodger init
-nano ~/.config/war-dodger/config.conf
 war-dodger once
 ```
 
-Zusätzlich muss die Android-App **Termux:API** installiert sein; erteile ihr
-die Standortberechtigung und deaktiviere keine Benachrichtigungen. Rust nutzt
-die Standortkoordinaten nur, um Aufenthaltsland und Landnachbarn zu bestimmen.
-Falls Termux:API nicht verfügbar ist, wird nur das Land über die öffentliche
-IP ermittelt; das kann bei VPN oder Mobilfunk-Routing ungenau sein.
-`termux-notification` erhält Titel und Text über `WAR_DODGER_TITLE` bzw.
-`WAR_DODGER_MESSAGE`, sodass später auch eine andere Push-Lösung verwendbar ist.
-
-## Paketvorbereitung
-
-Ein Termux-Paketrezept liegt unter `packaging/termux/war-dodger/`. Nach einem
-versionierten GitHub-Release muss dessen SHA-256 im Rezept eingetragen werden,
-bevor es als Pull Request an `termux-packages` eingereicht werden kann.
+The generated configuration is at `~/.config/war-dodger/config.conf`.
+`location_provider = termux` is the default; set it to `ip` to only use IP
+country lookup.
 
 ```sh
-war-dodger once     # eine Prüfung
-war-dodger status   # zuletzt gespeicherte Stufe
-war-dodger run      # Dauerbetrieb; schläft zwischen Prüfungen
+war-dodger once     # Run one check.
+war-dodger status   # Show saved country levels.
+war-dodger run      # Run continuously and sleep between checks.
 ```
 
-Für den Autostart nach Neustarts eignet sich Termux:Boot:
+For automatic startup after reboot, install Termux:Boot and create an
+executable `~/.termux/boot/start-war-dodger`:
 
 ```sh
 #!/data/data/com.termux/files/usr/bin/sh
@@ -62,5 +65,12 @@ termux-wake-lock
 exec war-dodger run >> "$HOME/.local/state/war-dodger.log" 2>&1
 ```
 
-Deaktiviere für Termux die Akku-Optimierung, damit Android den wartenden Prozess
-nicht beendet.
+Disable Android battery optimization for Termux so Android does not stop the
+waiting process.
+
+## Termux package submission
+
+The recipe is in `packaging/termux/war-dodger/`. Before submitting it to
+`termux/termux-packages`, create a versioned GitHub release and replace
+`SKIP_CHECKSUM` in the recipe with the release archive SHA-256. See
+`packaging/termux/README.md` for the complete checklist.

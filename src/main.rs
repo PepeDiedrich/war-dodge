@@ -244,19 +244,19 @@ fn save_levels(path: &Path, levels: &BTreeMap<String, Phase>) -> Result<(), Stri
 fn notify(config: &Config, country: &str, from: Option<Phase>, to: Phase) -> Result<(), String> {
     let message = match from {
         Some(p) if p == to => format!(
-            "{country}: Stufe {} ({}) ist weiterhin aktiv. Stündliche Erinnerung.",
+            "{country}: Level {} ({}) remains active. Hourly reminder.",
             to.number(),
             to.label()
         ),
         Some(p) => format!(
-            "{country}: Travel Advisory Stufe {} ({}) → Stufe {} ({}).",
+            "{country}: Travel Advisory Level {} ({}) → Level {} ({}).",
             p.number(),
             p.label(),
             to.number(),
             to.label()
         ),
         None => format!(
-            "{country}: Travel Advisory Stufe {} ({}).",
+            "{country}: Travel Advisory Level {} ({}).",
             to.number(),
             to.label()
         ),
