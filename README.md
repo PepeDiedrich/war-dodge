@@ -18,9 +18,6 @@ country-specific advisory and follow local authorities.
 The official levels are: 1 — Exercise normal precautions; 2 — Exercise
 increased caution; 3 — Reconsider travel; 4 — Do not travel.
 
-See [Level 3 action guide](LEVEL3_ACTION_GUIDE.md) for a practical preparation
-checklist.
-
 ## Data and privacy
 
 Travel Advisory levels are read only from the official State Department RSS
